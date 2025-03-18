@@ -78,15 +78,16 @@ if api_key:
         Exames laboratoriais ou de imagem (se disponíveis):
         - {exames}
 
-        Por favor:
-        1. Liste os diagnósticos diferenciais organizados por PROBABILIDADE, do mais provável ao menos provável, considerando os dados epidemiológicos e a apresentação clínica. Para cada diagnóstico, forneça uma breve justificativa baseada nos sintomas e sinais apresentados.
+        Analise os dados clínicos abaixo e forneça um diagnóstico diferencial considerando:
 
-        2. Em seguida, reorganize os mesmos diagnósticos por GRAVIDADE, do mais grave (potencialmente fatal ou com necessidade de intervenção imediata) ao menos grave. Para cada diagnóstico, indique o tempo estimado para intervenção e possíveis complicações caso não seja tratado adequadamente.
-
-        3. Sugira os próximos passos diagnósticos mais apropriados para confirmar ou descartar cada uma das hipóteses principais.
-
-        4. Indique se há sinais de alarme ou 'red flags' na apresentação que exigiriam atenção imediata ou encaminhamento para emergência.
-        """
+        1 Probabilidade: Liste os diagnósticos diferenciais do mais provável ao menos provável, com uma breve justificativa baseada nos sintomas e sinais apresentados.
+        
+        2 Gravidade: Reorganize os diagnósticos do mais grave ao menos grave, indicando o tempo estimado para intervenção e possíveis complicações.
+        
+        3 Próximos Passos: Sugira exames e procedimentos para confirmar ou descartar as principais hipóteses.
+        
+        4 Sinais de Alarme: Identifique "red flags" que exigem atenção imediata ou encaminhamento emergencial.
+       """
 
         try:
             with st.spinner("🧠 Analisando..."):
