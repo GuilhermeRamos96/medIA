@@ -1,12 +1,25 @@
 import streamlit as st
-import openai  # Usando SDK antigo
 import tiktoken
+import importlib.util
+import pkg_resources
 
 # Configuração da página
 st.set_page_config(page_title="Assistente de Diagnóstico", page_icon="🩺")
 
 st.title("🔍 Assistente de Diagnóstico Médico")
-st.caption("Versão compatível com contas gratuitas da OpenAI")
+st.caption("Versão universal - compatível com qualquer versão do OpenAI SDK")
+
+# Verificar versão do OpenAI
+try:
+    openai_version = pkg_resources.get_distribution("openai").version
+    st.info(f"📦 Versão detectada da biblioteca OpenAI: {openai_version}")
+    is_new_version = int(openai_version.split('.')[0]) >= 1
+except:
+    st.warning("⚠️ Não foi possível detectar a versão da biblioteca OpenAI. O código tentará se adaptar automaticamente.")
+    is_new_version = True  # Assume versão nova por padrão
+
+# Importar OpenAI
+import openai
 
 # Link para gerar a chave API na OpenAI
 st.markdown(
@@ -26,6 +39,46 @@ def contar_tokens(texto):
     except:
         # Estimativa aproximada se tiktoken falhar
         return len(texto.split()) * 1.3
+
+# Função para fazer chamada à API (compatível com ambas versões)
+def chamar_openai_api(api_key, prompt, max_tokens_resposta=500, temperatura=0.7):
+    if is_new_version:
+        # Versão nova (>=1.0.0)
+        try:
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens_resposta,
+                temperature=temperatura
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            # Se falhar, tenta método alternativo
+            try:
+                client = openai.Client(api_key=api_key)
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens_resposta,
+                    temperature=temperatura
+                )
+                return response.choices[0].message.content
+            except Exception as e2:
+                raise Exception(f"Erro na API (nova versão): {e}\nTentativa alternativa: {e2}")
+    else:
+        # Versão antiga (<1.0.0)
+        try:
+            openai.api_key = api_key
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens_resposta,
+                temperature=temperatura
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"Erro na API (versão antiga): {e}")
 
 # Verifica se a chave foi inserida
 if api_key:
@@ -144,17 +197,13 @@ if api_key:
 
         try:
             with st.spinner("🧠 Analisando..."):
-                # Usando formato antigo do SDK OpenAI (compatível com contas gratuitas)
-                openai.api_key = api_key
-
-                response = openai.ChatCompletion.create(
-                    model=modelo_escolhido,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=max_tokens_resposta,
-                    temperature=0.7
+                # Usando a função universal que se adapta à versão
+                resposta = chamar_openai_api(
+                    api_key=api_key,
+                    prompt=prompt,
+                    max_tokens_resposta=max_tokens_resposta,
+                    temperatura=0.7
                 )
-
-                resposta = response.choices[0].message.content
             
             st.subheader("📄 Resultado da Análise:")
             st.markdown(resposta)
@@ -169,7 +218,17 @@ if api_key:
         
         except Exception as e:
             st.error(f"❌ Erro ao acessar a API: {e}")
-            st.info("💡 Se o erro for de quota insuficiente, use a análise simplificada ou reduza o tamanho dos campos.")
+            st.info("""
+            💡 Possíveis soluções:
+            
+            1. Se o erro for de quota insuficiente, use a análise simplificada ou reduza o tamanho dos campos.
+            
+            2. Se o erro for relacionado à versão da biblioteca OpenAI, você pode:
+               - Para versão antiga: `pip install openai==0.28`
+               - Para versão nova: `pip install --upgrade openai`
+            
+            3. Verifique se a chave API está correta e ativa.
+            """)
 
 else:
     st.warning("⚠️ Digite sua chave da API para começar.")
