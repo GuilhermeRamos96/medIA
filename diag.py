@@ -160,3 +160,4 @@ if api_key:
 
 else:
     st.warning("⚠️ Digite sua chave da API para começar.")
+
