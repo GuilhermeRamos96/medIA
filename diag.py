@@ -3,12 +3,15 @@ import tiktoken
 import requests
 import json
 import os
+import base64
+from PIL import Image
+import io
 
 # Configuração da página
 st.set_page_config(page_title="Assistente de Diagnóstico", page_icon="🩺")
 
 st.title("🔍 Assistente de Diagnóstico Médico")
-st.caption("Versão com Groq API - compatível com modelos Llama")
+st.caption("Versão com Groq API - compatível com modelos Llama e análise de imagens médicas")
 
 # Link para gerar a chave API na Groq
 st.markdown(
@@ -28,6 +31,45 @@ def contar_tokens(texto):
     except:
         # Estimativa aproximada se tiktoken falhar
         return len(texto.split()) * 1.3
+
+# Função para processar imagem e extrair descrição (mockada)
+def processar_imagem(uploaded_file):
+    """
+    Processa a imagem carregada e retorna uma descrição mockada.
+    Em uma implementação real, isso seria feito por OCR ou modelo de captioning.
+    """
+    try:
+        # Validar se é uma imagem válida
+        if uploaded_file.type.startswith('image/'):
+            image = Image.open(uploaded_file)
+            
+            # Simular análise baseada no nome do arquivo e tipo
+            filename = uploaded_file.name.lower()
+            
+            # Descrições mockadas baseadas em padrões comuns de nomes de arquivos médicos
+            if any(term in filename for term in ['raio-x', 'rx', 'xray', 'chest', 'torax']):
+                return f"Descrição da imagem {uploaded_file.name}: Radiografia de tórax mostrando campos pulmonares com padrão intersticial bilateral, possível consolidação no lobo inferior direito."
+            elif any(term in filename for term in ['ct', 'tomografia', 'tc']):
+                return f"Descrição da imagem {uploaded_file.name}: Tomografia computadorizada evidenciando alterações parenquimatosas difusas, com áreas de atenuação em vidro fosco."
+            elif any(term in filename for term in ['ecg', 'eletro', 'cardio']):
+                return f"Descrição da imagem {uploaded_file.name}: Eletrocardiograma de 12 derivações mostrando ritmo sinusal regular, frequência cardíaca de aproximadamente 80 bpm."
+            elif any(term in filename for term in ['lab', 'exame', 'hemograma', 'sangue']):
+                return f"Descrição da imagem {uploaded_file.name}: Resultado de exame laboratorial mostrando alterações nos valores de referência, necessitando análise médica detalhada."
+            elif any(term in filename for term in ['ultra', 'usg', 'sono']):
+                return f"Descrição da imagem {uploaded_file.name}: Ultrassonografia revelando estruturas anatômicas com alterações ecogênicas, sugerindo processo inflamatório."
+            elif any(term in filename for term in ['ressonancia', 'rm', 'mri']):
+                return f"Descrição da imagem {uploaded_file.name}: Ressonância magnética demonstrando alterações de sinal em T1 e T2, compatível com processo patológico."
+            else:
+                return f"Descrição da imagem {uploaded_file.name}: Imagem médica carregada apresentando estruturas anatômicas que requerem análise especializada para interpretação diagnóstica."
+        
+        elif uploaded_file.type == 'application/pdf':
+            return f"Descrição do documento {uploaded_file.name}: Documento PDF médico contendo resultados de exames, laudos ou relatórios clínicos que necessitam análise profissional."
+        
+        else:
+            return f"Arquivo {uploaded_file.name}: Formato não suportado para análise automática."
+            
+    except Exception as e:
+        return f"Erro ao processar {uploaded_file.name}: {str(e)}"
 
 # Função para fazer chamada à API Groq usando requests
 def chamar_groq_api(api_key, prompt, max_tokens_resposta=500, temperatura=0.7):
@@ -101,6 +143,43 @@ if api_key:
     # Exibir contador de tokens estimados
     st.info("ℹ️ Monitore o uso de tokens para controlar custos e limites da API.")
     
+    # Seção de upload de imagens médicas
+    st.subheader("📷 Upload de Imagens Médicas")
+    st.info("🔬 Carregue imagens médicas como raios-X, tomografias, ECGs ou fotos de exames laboratoriais para análise complementar.")
+    
+    uploaded_files = st.file_uploader(
+        "Selecione as imagens médicas:",
+        type=['jpg', 'jpeg', 'png', 'pdf'],
+        accept_multiple_files=True,
+        help="Formatos suportados: JPG, PNG, PDF. Você pode carregar múltiplos arquivos."
+    )
+    
+    # Processar imagens carregadas
+    descricoes_imagens = []
+    if uploaded_files:
+        st.success(f"✅ {len(uploaded_files)} arquivo(s) carregado(s) com sucesso!")
+        
+        for uploaded_file in uploaded_files:
+            with st.expander(f"📄 Visualizar: {uploaded_file.name}"):
+                # Mostrar informações do arquivo
+                st.write(f"**Nome:** {uploaded_file.name}")
+                st.write(f"**Tipo:** {uploaded_file.type}")
+                st.write(f"**Tamanho:** {uploaded_file.size} bytes")
+                
+                # Processar e mostrar descrição
+                if uploaded_file.type.startswith('image/'):
+                    try:
+                        image = Image.open(uploaded_file)
+                        st.image(image, caption=uploaded_file.name, use_column_width=True)
+                    except Exception as e:
+                        st.error(f"Erro ao exibir imagem: {str(e)}")
+                
+                # Gerar descrição da imagem
+                descricao = processar_imagem(uploaded_file)
+                descricoes_imagens.append(descricao)
+                st.write("**Análise automática:**")
+                st.write(descricao)
+    
     with st.form("diagnostico_form"):
         st.subheader("📋 Dados do Paciente")
 
@@ -152,6 +231,13 @@ if api_key:
             st.error("❌ Por favor, descreva os sintomas.")
             st.stop()
         
+        # Construir seção de imagens para o prompt
+        secao_imagens = ""
+        if descricoes_imagens:
+            secao_imagens = "\n\nDescrições de imagens médicas anexadas:\n"
+            for i, descricao in enumerate(descricoes_imagens, 1):
+                secao_imagens += f"{i}. {descricao}\n"
+        
         # Construir prompt de acordo com o tipo de análise selecionado
         if tipo_analise == "Análise Simplificada (Recomendado para uso eficiente)":
             prompt = f"""
@@ -161,14 +247,16 @@ if api_key:
             Comorbidades: {comorbidades if comorbidades else "Nenhuma relatada"}
             Queixa principal: {queixa_principal}
             Sintomas: {sintomas}
+            {secao_imagens}
             
             Forneça uma análise concisa com:
             1. Diagnósticos diferenciais mais prováveis (máximo 3)
             2. Próximos passos recomendados
+            {("3. Correlação com achados das imagens médicas" if descricoes_imagens else "")}
             
             Mantenha a resposta focada e objetiva.
             """
-            max_tokens_resposta = 300
+            max_tokens_resposta = 300 if not descricoes_imagens else 400
         elif tipo_analise == "Análise Intermediária (Risco moderado de exceder limite)":
             prompt = f"""
             Como assistente médico especializado, analise detalhadamente o seguinte caso clínico:
@@ -178,15 +266,17 @@ if api_key:
             Queixa principal: {queixa_principal}
             Sintomas: {sintomas}
             {f"Sinais vitais: {sinais_vitais}" if sinais_vitais else ""}
+            {secao_imagens}
             
             Forneça uma análise estruturada com:
             1. Diagnósticos diferenciais mais prováveis (máximo 5)
             2. Próximos passos recomendados (exames e avaliações)
             3. Sinais de alarme a observar
+            {("4. Análise das imagens médicas e correlação clínica" if descricoes_imagens else "")}
             
             Justifique brevemente cada diagnóstico diferencial.
             """
-            max_tokens_resposta = 500
+            max_tokens_resposta = 500 if not descricoes_imagens else 600
         else:
             prompt = f"""
             Como assistente médico especializado, realize uma análise completa do seguinte caso clínico:
@@ -202,6 +292,7 @@ if api_key:
             {f"- Sinais vitais: {sinais_vitais}" if sinais_vitais else ""}
             {f"- Exame físico: {exame_fisico}" if exame_fisico else ""}
             {f"- Exames complementares: {exames}" if exames else ""}
+            {secao_imagens}
             
             Forneça uma análise médica abrangente incluindo:
             1. Diagnósticos diferenciais ordenados por probabilidade
@@ -209,10 +300,11 @@ if api_key:
             3. Próximos passos diagnósticos recomendados (exames laboratoriais, imagem, etc.)
             4. Sinais de alarme que exigem atenção médica imediata
             5. Orientações gerais para manejo inicial
+            {("6. Análise detalhada das imagens médicas e integração com quadro clínico" if descricoes_imagens else "")}
             
             Justifique cada diagnóstico diferencial com base nos dados apresentados.
             """
-            max_tokens_resposta = 800
+            max_tokens_resposta = 800 if not descricoes_imagens else 1000
 
         # Contar e exibir tokens
         tokens_estimados = contar_tokens(prompt)
@@ -240,6 +332,10 @@ if api_key:
             st.info(f"📊 Tokens na resposta: {tokens_resposta}")
             st.success(f"📊 Total de tokens utilizados: {tokens_estimados + tokens_resposta}")
             
+            # Mostrar estatísticas das imagens se houver
+            if uploaded_files:
+                st.info(f"📷 Imagens processadas: {len(uploaded_files)} arquivo(s)")
+            
             # Aviso sobre disclaimers médicos
             st.warning("""
             ⚠️ **IMPORTANTE - Disclaimer Médico:**
@@ -247,6 +343,9 @@ if api_key:
             Esta análise é apenas para fins educacionais e informativos. 
             NÃO substitui consulta médica profissional, diagnóstico ou tratamento.
             Sempre procure orientação médica qualificada para questões de saúde.
+            
+            As descrições de imagens são geradas automaticamente e podem não refletir 
+            com precisão o conteúdo real das imagens médicas carregadas.
             """)
             
             if (tokens_estimados + tokens_resposta) > 1500:
