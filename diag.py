@@ -10,7 +10,7 @@ import io
 # Configuração da página
 st.set_page_config(page_title="Assistente de Diagnóstico", page_icon="🩺")
 
-st.title("🔍 Assistente de Diagnóstico Médico")
+st.title("🔍 Assistente de Diagnóstico")
 st.caption("Versão com Groq API - compatível com modelos Llama e análise de imagens médicas")
 
 # Link para gerar a chave API na Groq
